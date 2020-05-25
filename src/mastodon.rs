@@ -1,5 +1,6 @@
 use super::sanitize::CleanHtml;
 use super::{crom, crom_canary};
+use elefren::entities::event::Event;
 use elefren::entities::notification::{Notification, NotificationType};
 use elefren::helpers::{cli, toml};
 use elefren::prelude::*;
@@ -60,13 +61,12 @@ pub fn start() -> Result<!, Box<dyn Error>> {
 
     loop {
         println!("[Mastodon] Polling...");
-        for notif in mastodon.notifications()?.items_iter() {
-            println!("[Mastodon] Received notification!");
-            if let Notification {
+        for notif in mastodon.streaming_user()? {
+            if let Event::Notification(Notification {
                 notification_type: NotificationType::Mention,
                 status: Some(status),
                 ..
-            } = notif
+            }) = notif
             {
                 println!("[Mastodon] Received query!");
                 let reply = respond_to(&status.content)?;
