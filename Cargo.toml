@@ -14,3 +14,4 @@ anyhow = "1.0.31"
 attohttpc = { version = "0.13.0", features = ["json"] }
 elefren = { version = "0.21.0", features = ["toml"] }
 html5ever = "0.25.1"
+openssl = { version = "0.10.29", features = ["vendored"] }

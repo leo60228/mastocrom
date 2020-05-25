@@ -1,5 +1,5 @@
-use super::crom;
 use super::sanitize::CleanHtml;
+use super::{crom, crom_canary};
 use elefren::entities::notification::{Notification, NotificationType};
 use elefren::helpers::{cli, toml};
 use elefren::prelude::*;
@@ -31,15 +31,18 @@ fn register() -> Result<Mastodon, Box<dyn Error>> {
 }
 
 fn respond_to(msg: &str) -> Result<String, Box<dyn Error>> {
-    let query = CleanHtml(msg)
-        .to_string()
-        .replace("@mastocrom@60228.dev", "")
-        .replace("@mastocrom", "");
-    let trimmed = query.trim();
-    println!("[Mastodon] Query: {}", trimmed);
-    let page = crom::search(trimmed)?;
+    let query = CleanHtml(msg).to_string();
+    let trimmed = query.rsplit("@mastocrom").next().unwrap_or("").trim();
+    let without_flags = trimmed.trim_start_matches("canary:").trim_start();
+    let (msg, search_fn): (_, fn(_) -> _) = if without_flags == trimmed {
+        ("Classic", crom::search)
+    } else {
+        ("Canary", crom_canary::search)
+    };
+    println!("[Mastodon] {} query: {}", msg, without_flags);
+    let page = search_fn(without_flags)?;
     if let Some(page) = page {
-        if let Some(title) = page.title {
+        if let Some(title) = page.scp_title.or(page.title) {
             Ok(format!("{} - {}", title, page.url))
         } else {
             Ok(page.url.to_string())
