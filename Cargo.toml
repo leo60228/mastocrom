@@ -1,0 +1,16 @@
+[package]
+name = "mastocrom"
+version = "0.1.0"
+authors = ["leo60228 <leo@60228.dev>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+graphql_client = "0.9.0"
+serde = { version = "1.0.110", features = ["derive"] }
+url = { version = "2.1.1", features = ["serde"] }
+anyhow = "1.0.31"
+attohttpc = { version = "0.13.0", features = ["json"] }
+elefren = { version = "0.21.0", features = ["toml"] }
+html5ever = "0.25.1"

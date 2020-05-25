@@ -1,0 +1,8 @@
+query SearchQuery($query: String!) {
+  searchPages(query: $query) {
+    url
+    wikidotInfo {
+      title
+    }
+  }
+}
