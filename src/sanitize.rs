@@ -1,5 +1,6 @@
+use html5ever::local_name;
 use html5ever::tokenizer::{
-    BufferQueue,
+    BufferQueue, Tag,
     Token::{self, *},
     TokenSink, TokenSinkResult, Tokenizer, TokenizerResult,
 };
@@ -34,6 +35,9 @@ impl<'a, 'b> TokenSink for MarkupTagCleaner<'a, 'b> {
             CharacterTokens(b) => {
                 self.w.write_str(&b[..]).unwrap();
             }
+            TagToken(Tag { name, .. }) if name == local_name!("br") => {
+                self.w.write_str("\n").unwrap();
+            }
             NullCharacterToken => self.w.write_str("\0").unwrap(),
             _ => {}
         }
@@ -48,6 +52,14 @@ mod test {
         assert_eq!(
             super::CleanHtml("<asdf>asdf</asdf>, asdf").to_string(),
             "asdf, asdf"
+        );
+    }
+
+    #[test]
+    fn br() {
+        assert_eq!(
+            super::CleanHtml("<asdf>asdf</asdf>,<br>asdf").to_string(),
+            "asdf,\nasdf"
         );
     }
 }

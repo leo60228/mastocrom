@@ -32,9 +32,7 @@ fn register() -> Result<Mastodon, Box<dyn Error>> {
 }
 
 fn respond_to(msg: &str) -> Result<String, Box<dyn Error>> {
-    let query = CleanHtml(msg).to_string();
-    let trimmed = query.rsplit("@mastocrom").next().unwrap_or("").trim();
-    let opt = match super::parse::parse(trimmed) {
+    let opt = match super::parse::parse(msg) {
         Ok(opt) => opt,
         Err(err) => {
             let err = err.to_string();
@@ -69,6 +67,7 @@ pub fn start() -> Result<!, Box<dyn Error>> {
 
     loop {
         println!("[Mastodon] Polling...");
+        let mut last_status = None::<String>;
         for notif in mastodon.streaming_user()? {
             if let Event::Notification(Notification {
                 notification_type: NotificationType::Mention,
@@ -76,13 +75,21 @@ pub fn start() -> Result<!, Box<dyn Error>> {
                 ..
             }) = notif
             {
+                if matches!(last_status, Some(ref x) if x == &status.id) {
+                    continue;
+                }
                 println!("[Mastodon] Received query!");
-                let reply = respond_to(&status.content)?;
-                let reply_status = StatusBuilder::new()
-                    .status(reply)
-                    .in_reply_to(status.id)
-                    .build()?;
-                mastodon.new_status(reply_status)?;
+                let cleaned = CleanHtml(&status.content).to_string();
+                for query in cleaned.split("@mastocrom").skip(1) {
+                    let query = query.split("\n").next().unwrap_or("").trim();
+                    let reply = respond_to(query)?;
+                    let reply_status = StatusBuilder::new()
+                        .status(reply)
+                        .in_reply_to(&status.id)
+                        .build()?;
+                    mastodon.new_status(reply_status)?;
+                }
+                last_status = Some(status.id);
             }
         }
         mastodon.clear_notifications()?;
