@@ -34,14 +34,22 @@ fn register() -> Result<Mastodon, Box<dyn Error>> {
 fn respond_to(msg: &str) -> Result<String, Box<dyn Error>> {
     let query = CleanHtml(msg).to_string();
     let trimmed = query.rsplit("@mastocrom").next().unwrap_or("").trim();
-    let without_flags = trimmed.trim_start_matches("canary:").trim_start();
-    let (msg, search_fn): (_, fn(_) -> _) = if without_flags == trimmed {
-        ("Classic", crom::search)
-    } else {
-        ("Canary", crom_canary::search)
+    let opt = match super::parse::parse(trimmed) {
+        Ok(opt) => opt,
+        Err(err) => {
+            let err = err.to_string();
+            println!("[Mastodon] Parse error");
+            return Ok(err);
+        }
     };
-    println!("[Mastodon] {} query: {}", msg, without_flags);
-    let page = search_fn(without_flags)?;
+    let search = opt.query.join(" ");
+    println!("[Mastodon] Parsed query {:?}: {:?}", search, opt);
+    let search_fn: fn(_) -> _ = if opt.canary {
+        crom_canary::search
+    } else {
+        crom::search
+    };
+    let page = search_fn(search)?;
     if let Some(page) = page {
         if let Some(title) = page.scp_title.or(page.title) {
             Ok(format!("{} - {}", title, page.url))

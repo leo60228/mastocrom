@@ -15,6 +15,8 @@ attohttpc = { version = "0.13.0", features = ["json"] }
 elefren = { version = "0.21.0", features = ["toml"] }
 html5ever = "0.25.1"
 openssl = { version = "0.10.29", features = ["vendored"] }
+structopt = "0.3.14"
+shlex = "0.1.1"
 
 [patch.crates-io]
 elefren = { git = "https://github.com/leo60228/elefren.git", branch = "ws" }
