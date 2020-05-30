@@ -2,9 +2,13 @@ use super::sanitize::CleanHtml;
 use super::{crom, crom_canary};
 use elefren::entities::event::Event;
 use elefren::entities::notification::{Notification, NotificationType};
+use elefren::entities::status::Status;
 use elefren::helpers::{cli, toml};
 use elefren::prelude::*;
+use itertools::Itertools;
+use lazy_format::lazy_format;
 use std::error::Error;
+use std::iter;
 use std::thread;
 use std::time::Duration;
 
@@ -59,6 +63,20 @@ fn respond_to(msg: &str) -> Result<String, Box<dyn Error>> {
     }
 }
 
+fn reply_mentions(status: &Status) -> String {
+    let author = &status.account.acct;
+    iter::once(author)
+        .chain(
+            status
+                .mentions
+                .iter()
+                .filter(|x| x.url != "https://60228.dev/@mastocrom")
+                .map(|x| &x.acct),
+        )
+        .map(|x| lazy_format!("@{}", x))
+        .join(" ")
+}
+
 pub fn start() -> Result<!, Box<dyn Error>> {
     let mastodon = get_mastodon_data()?;
 
@@ -82,9 +100,10 @@ pub fn start() -> Result<!, Box<dyn Error>> {
                 let cleaned = CleanHtml(&status.content).to_string();
                 for query in cleaned.split("@mastocrom").skip(1) {
                     let query = query.split("\n").next().unwrap_or("").trim();
-                    let reply = respond_to(query)?;
+                    let result = respond_to(query)?;
+                    let reply = format!("{} {}", reply_mentions(&status), result);
                     let reply_status = StatusBuilder::new()
-                        .status(reply)
+                        .status(reply.trim_start())
                         .in_reply_to(&status.id)
                         .build()?;
                     mastodon.new_status(reply_status)?;
