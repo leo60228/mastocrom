@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use log::*;
 use structopt::clap::AppSettings::{ColorNever, NoBinaryName, TrailingVarArg};
 use structopt::StructOpt;
 
@@ -32,6 +33,6 @@ pub fn parse(input: &str) -> Result<Opt> {
         shlexed.push("--".into());
         shlexed.push(remainder.trim().into());
     }
-    println!("[Parse] Arguments: {:?}", shlexed);
+    debug!("Arguments: {:?}", shlexed);
     Ok(Opt::from_iter_safe(shlexed.into_iter())?)
 }

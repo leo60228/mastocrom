@@ -7,6 +7,7 @@ use elefren::helpers::{cli, toml};
 use elefren::prelude::*;
 use itertools::Itertools;
 use lazy_format::lazy_format;
+use log::*;
 use std::error::Error;
 use std::iter;
 use std::thread;
@@ -40,12 +41,12 @@ fn respond_to(msg: &str) -> Result<String, Box<dyn Error>> {
         Ok(opt) => opt,
         Err(err) => {
             let err = err.to_string();
-            println!("[Mastodon] Parse error");
+            warn!("Parse error for query {:?} ({})", msg, err);
             return Ok(err);
         }
     };
     let search = opt.query.join(" ");
-    println!("[Mastodon] Parsed query {:?}: {:?}", search, opt);
+    debug!("Parsed query {:?}: {:?}", search, opt);
     let search_fn: fn(_) -> _ = if opt.canary {
         crom_canary::search
     } else {
@@ -81,10 +82,10 @@ pub fn start() -> Result<!, Box<dyn Error>> {
     let mastodon = get_mastodon_data()?;
 
     let acc = mastodon.verify_credentials()?;
-    println!("[Mastodon] Connected as {}", acc.username);
+    info!("Connected as {}", acc.username);
 
     loop {
-        println!("[Mastodon] Polling...");
+        trace!("Polling...");
         let mut last_status = None::<String>;
         for notif in mastodon.streaming_user()? {
             if let Event::Notification(Notification {
@@ -96,7 +97,7 @@ pub fn start() -> Result<!, Box<dyn Error>> {
                 if matches!(last_status, Some(ref x) if x == &status.id) {
                     continue;
                 }
-                println!("[Mastodon] Received query!");
+                info!("Received query!");
                 let cleaned = CleanHtml(&status.content).to_string();
                 for query in cleaned.split("@mastocrom").skip(1) {
                     let query = query.split("\n").next().unwrap_or("").trim();
@@ -112,7 +113,7 @@ pub fn start() -> Result<!, Box<dyn Error>> {
             }
         }
         mastodon.clear_notifications()?;
-        println!("[Mastodon] Sleeping...");
+        trace!("Sleeping...");
         thread::sleep(Duration::from_secs(15));
     }
 }
