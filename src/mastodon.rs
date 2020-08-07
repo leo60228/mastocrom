@@ -1,5 +1,5 @@
 use super::sanitize::CleanHtml;
-use super::{crom, crom_canary};
+use elefren::entities::account::Account;
 use elefren::entities::event::Event;
 use elefren::entities::notification::{Notification, NotificationType};
 use elefren::entities::status::Status;
@@ -24,9 +24,9 @@ fn get_mastodon_data() -> Result<Mastodon, Box<dyn Error>> {
 fn register() -> Result<Mastodon, Box<dyn Error>> {
     let website = "https://60228.dev";
     let registration = Registration::new(website.trim())
-        .client_name("upd8r")
+        .client_name("mastocrom")
         .scopes(Scopes::all())
-        .website("https://github.com/leo60228/upd8r")
+        .website("https://github.com/leo60228/mastocrom")
         .build()?;
     let mastodon = cli::authenticate(registration)?;
 
@@ -36,25 +36,21 @@ fn register() -> Result<Mastodon, Box<dyn Error>> {
     Ok(mastodon)
 }
 
-fn respond_to(msg: &str) -> Result<String, Box<dyn Error>> {
-    let opt = match super::parse::parse(msg) {
-        Ok(opt) => opt,
-        Err(err) => {
-            let err = err.to_string();
-            warn!("Parse error for query {:?} ({})", msg, err);
-            return Ok(err);
-        }
-    };
-    let search = opt.query.join(" ");
-    debug!("Parsed query {:?}: {:?}", search, opt);
-    let search_fn: fn(_) -> _ = if opt.canary {
-        crom_canary::search
-    } else {
-        crom::search
-    };
-    let page = search_fn(search)?;
-    if let Some(page) = page {
-        if let Some(title) = page.scp_title.or(page.title) {
+async fn respond_to(
+    client: &crom::Client<http_client::native::NativeClient>,
+    search: &str,
+) -> Result<String, Box<dyn Error>> {
+    debug!("Got search {:?}", search);
+    let pages = client
+        .search(
+            search,
+            Some(vec!["http://scp-wiki.wikidot.com".to_string()]),
+        )
+        .await?;
+    if let Some(page) = pages.get(0) {
+        if let Some(crom::PageAlternateTitle { title, .. }) = page.alternate_titles.get(0) {
+            Ok(format!("{} - {}", title, page.url))
+        } else if let Some(title) = page.wikidot_info.as_ref().and_then(|x| x.title.as_ref()) {
             Ok(format!("{} - {}", title, page.url))
         } else {
             Ok(page.url.to_string())
@@ -64,25 +60,29 @@ fn respond_to(msg: &str) -> Result<String, Box<dyn Error>> {
     }
 }
 
-fn reply_mentions(status: &Status) -> String {
+fn reply_mentions(status: &Status, account: &Account) -> String {
     let author = &status.account.acct;
     iter::once(author)
         .chain(
             status
                 .mentions
                 .iter()
-                .filter(|x| x.url != "https://60228.dev/@mastocrom")
+                .filter(|x| x.url != account.url)
                 .map(|x| &x.acct),
         )
         .map(|x| lazy_format!("@{}", x))
         .join(" ")
 }
 
-pub fn start() -> Result<!, Box<dyn Error>> {
+pub async fn start() -> Result<!, Box<dyn Error>> {
     let mastodon = get_mastodon_data()?;
 
     let acc = mastodon.verify_credentials()?;
     info!("Connected as {}", acc.username);
+
+    let at = format!("@{}", acc.username);
+
+    let crom = crom::Client::new();
 
     loop {
         trace!("Polling...");
@@ -99,10 +99,10 @@ pub fn start() -> Result<!, Box<dyn Error>> {
                 }
                 info!("Received query!");
                 let cleaned = CleanHtml(&status.content).to_string();
-                for query in cleaned.split("@mastocrom").skip(1) {
+                for query in cleaned.split(&at).skip(1) {
                     let query = query.split("\n").next().unwrap_or("").trim();
-                    let result = respond_to(query)?;
-                    let reply = format!("{} {}", reply_mentions(&status), result);
+                    let result = respond_to(&crom, query).await?;
+                    let reply = format!("{} {}", reply_mentions(&status, &acc), result);
                     let reply_status = StatusBuilder::new()
                         .status(reply.trim_start())
                         .in_reply_to(&status.id)
